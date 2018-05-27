@@ -343,7 +343,7 @@ export default declare((api, options) => {
         const privateMaps = [];
         const privateMapInits = [];
         for (const prop of props) {
-          if (prop.isPrivate()) {
+          if (prop.isPrivate() && !prop.node.static) {
             const inits = [];
             privateMapInits.push(inits);
 
