@@ -83,6 +83,17 @@ export default declare((api, options) => {
     },
   };
 
+  // Traverses the class scope, handling private static name references.
+  // TODO: more description of the visitor
+  const privateStaticNameVisitor = {
+    PrivateName(path) {
+      const { name } = this;
+      const { node, parentPath } = path;
+      if (node.id.name !== name) return;
+      this.handle(parentPath);
+    },
+  };
+
   // Traverses the outer portion of a class, without touching the class's inner
   // scope, for private names.
   const privateNameInnerVisitor = traverse.visitors.merge([
@@ -152,6 +163,18 @@ export default declare((api, options) => {
           BASE: file.addHelper("classPrivateFieldLooseBase"),
           REF: object,
           PROP: prop,
+        }),
+      );
+    },
+  };
+
+  // TODO: loose/spec versions
+  const privateStaticNameHandler = {
+    handle(member) {
+      const { globVar } = this;
+      member.replaceWith(
+        template.expression`GLOB_VAR`({
+          GLOB_VAR: globVar,
         }),
       );
     },
@@ -253,12 +276,20 @@ export default declare((api, options) => {
     ? buildClassPrivatePropertyLoose
     : buildClassPrivatePropertySpec;
 
-  function buildPrivateClassProperty(path) {
+  function buildStaticPrivateClassProperty(ref, path, state) {
     // TODO: handle Spec/Loose versions
-    const { scope } = path;
+    const { parentPath, scope } = path;
     const { name } = path.node.key.id;
 
     const globVar = scope.generateUidIdentifier(name);
+
+    parentPath.traverse(privateStaticNameVisitor, {
+      name,
+      globVar,
+      file: state,
+      ...privateStaticNameHandler,
+    });
+
     // TODO: Use helpers here?
     return template.statement`var GLOB_VAR = VALUE;`({
       GLOB_VAR: globVar,
@@ -369,7 +400,9 @@ export default declare((api, options) => {
         let p = 0;
         for (const prop of props) {
           if (prop.isPrivate() && prop.node.static) {
-            staticNodes.push(buildPrivateClassProperty(prop));
+            staticNodes.push(
+              buildStaticPrivateClassProperty(t.cloneNode(ref), prop, state),
+            );
           } else if (prop.node.static) {
             staticNodes.push(buildClassProperty(t.cloneNode(ref), prop, state));
           } else if (prop.isPrivate()) {
