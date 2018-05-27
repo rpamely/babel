@@ -253,6 +253,19 @@ export default declare((api, options) => {
     ? buildClassPrivatePropertyLoose
     : buildClassPrivatePropertySpec;
 
+  function buildPrivateClassProperty(path) {
+    // TODO: handle Spec/Loose versions
+    const { scope } = path;
+    const { name } = path.node.key.id;
+
+    const globVar = scope.generateUidIdentifier(name);
+    // TODO: Use helpers here?
+    return template.statement`var GLOB_VAR = VALUE;`({
+      GLOB_VAR: globVar,
+      VALUE: path.node.value || scope.buildUndefinedNode(),
+    });
+  }
+
   return {
     inherits: syntaxClassProperties,
 
@@ -356,10 +369,7 @@ export default declare((api, options) => {
         let p = 0;
         for (const prop of props) {
           if (prop.isPrivate() && prop.node.static) {
-            // TODO: build a private static class field
-            throw path.buildCodeFrameError(
-              "Static class fields are not spec'ed yet.",
-            );
+            staticNodes.push(buildPrivateClassProperty(prop));
           } else if (prop.node.static) {
             staticNodes.push(buildClassProperty(t.cloneNode(ref), prop, state));
           } else if (prop.isPrivate()) {
