@@ -263,6 +263,7 @@ export default declare((api, options) => {
         const props = [];
         const computedPaths = [];
         const privateNames = new Set();
+        const privateStaticNames = new Set();
         const body = path.get("body");
 
         for (const path of body.get("body")) {
@@ -280,14 +281,18 @@ export default declare((api, options) => {
             const { static: isStatic, key: { id: { name } } } = path.node;
 
             if (isStatic) {
-              throw path.buildCodeFrameError(
-                "Static class fields are not spec'ed yet.",
-              );
+              if (privateStaticNames.has(name)) {
+                throw path.buildCodeFrameError(
+                  "Duplicate static private field",
+                );
+              }
+              privateStaticNames.add(name);
+            } else {
+              if (privateNames.has(name)) {
+                throw path.buildCodeFrameError("Duplicate private field");
+              }
+              privateNames.add(name);
             }
-            if (privateNames.has(name)) {
-              throw path.buildCodeFrameError("Duplicate private field");
-            }
-            privateNames.add(name);
           }
 
           if (path.isProperty()) {
@@ -350,7 +355,12 @@ export default declare((api, options) => {
 
         let p = 0;
         for (const prop of props) {
-          if (prop.node.static) {
+          if (prop.isPrivate() && prop.node.static) {
+            // TODO: build a private static class field
+            throw path.buildCodeFrameError(
+              "Static class fields are not spec'ed yet.",
+            );
+          } else if (prop.node.static) {
             staticNodes.push(buildClassProperty(t.cloneNode(ref), prop, state));
           } else if (prop.isPrivate()) {
             instanceBody.push(privateMaps[p]());
