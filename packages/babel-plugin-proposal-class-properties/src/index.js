@@ -87,10 +87,20 @@ export default declare((api, options) => {
   // TODO: more description of the visitor
   const privateStaticNameVisitor = {
     PrivateName(path) {
-      const { name } = this;
+      const { name, className } = this;
       const { node, parentPath } = path;
       if (node.id.name !== name) return;
-      this.handle(parentPath);
+      // TODO: resolved name doesn't seem to work all the time:
+      const [boundClassName] = Object.keys(parentPath.context.scope.bindings);
+      console.log(boundClassName, className);
+      if (boundClassName === className) {
+        this.handle(parentPath);
+        return;
+      }
+      if (parentPath.isMemberExpression({ property: node })) {
+        this.handleMember(parentPath);
+        return;
+      }
     },
   };
 
@@ -176,6 +186,11 @@ export default declare((api, options) => {
         template.expression`GLOB_VAR`({
           GLOB_VAR: globVar,
         }),
+      );
+    },
+    handleMember(member) {
+      throw member.buildCodeFrameError(
+        "TODO: support private static access using this.#",
       );
     },
   };
@@ -286,6 +301,7 @@ export default declare((api, options) => {
     parentPath.traverse(privateStaticNameVisitor, {
       name,
       globVar,
+      className: ref.name,
       file: state,
       ...privateStaticNameHandler,
     });
